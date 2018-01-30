@@ -45,6 +45,23 @@ from keras import regularizers
 from matplotlib.mlab import PCA
 import matplotlib.pyplot as plt
 
+def IoU_metric(y_true, y_pred, smooth=K.epsilon()):
+    min = K.sum(minimum(K.abs(y_true), K.abs(y_pred)))
+    max = K.sum(maximum(K.abs(y_true), K.abs(y_pred)))
+    sum = (min + smooth) / (max + smooth)
+    return K.mean(sum)
+
+
+def IoU(y_true, y_pred):
+    return 1 - IoU_metric(y_true, y_pred)
+
+
+def mean_squared_error(y_true, y_pred):
+    return losses.mse(y_true, y_pred)
+
+def misc(y_true, y_pred):
+    return 0.5 * mean_squared_error(y_true, y_pred) + 0.5 * IoU(y_true, y_pred)
+
 class uNet:
     trainQuantil = 0
     batch_size = 0
@@ -160,27 +177,11 @@ class uNet:
 
         return trainingData
 
-    def nmf(self, trainingData):
-        return trainingData
-
     def uNet(self, trainingData):
         """
         :param trainingData: numpy array of the training data.
         :return:
         """
-
-        def IoU_metric(y_true, y_pred, smooth=K.epsilon()):
-            min = K.sum(minimum(K.abs(y_true), K.abs(y_pred)))
-            max = K.sum(maximum(K.abs(y_true), K.abs(y_pred)))
-            sum = (min + smooth) / (max + smooth)
-            return K.mean(sum)
-
-        def IoU(y_true, y_pred):
-            return 1 - IoU_metric(y_true, y_pred)
-
-        def mean_squared_error(y_true, y_pred):
-            return losses.mse(y_true, y_pred)
-
         input_shape = (trainingData.shape)[1:4]
         inputs = Input(shape=input_shape)
         
@@ -188,7 +189,7 @@ class uNet:
         up1 = UpSampling2D((2,2))(re1)
         noise1 = GaussianNoise(1)(up1)
 
-        conv1 = Conv2D(8, 3, kernel_initializer='lecun_normal', kernel_regularizer=regularizers.l1(0.005))(noise1)
+        conv1 = Conv2D(8, 3, kernel_initializer='lecun_normal', kernel_regularizer=regularizers.l1_l2(0.005))(noise1)
         conv1 = LeakyReLU(alpha=5.5)(conv1)
         conv1 = BatchNormalization()(conv1)
         conv1 = Conv2D(8, 3, kernel_initializer='lecun_normal', kernel_regularizer=regularizers.l2(0.001))(conv1)
@@ -259,11 +260,32 @@ class uNet:
         outputs = Reshape((9,9,9))(conv3)
 
         model = Model(inputs=inputs, outputs=outputs)
-        model.load_weights("model/checkpoint.hdf5")
-        model.summary()
-        model.compile(optimizer = Nadam(lr=0.5*1e-4), loss = "MSE", metrics = ["MAE", mean_squared_error, IoU_metric])
+        model.compile(optimizer = Nadam(lr=0.5*1e-4), loss = IoU, metrics = ["MAE", mean_squared_error, IoU_metric])
 
         return model
+
+    def evaluate(self, trainingPath, targetPath, modelPath):
+        trainingData, targetData = [], []
+        dvk_train, dvk_goal = sio.loadmat(trainingPath), sio.loadmat(targetPath)
+        trainingData.append(dvk_train["density_f"])
+        targetData.append(dvk_goal["kernel_f"])
+        trainingData, targetData = np.array(trainingData), np.array(targetData)
+        v, w, x, y, z = trainingData.shape
+        trainingData, targetData = trainingData.reshape(v * z, w, x, y), targetData.reshape(v * z, w, x, y)
+
+        mean_trainingData, mean_targetData = np.mean(trainingData), np.mean(targetData)
+        std_trainingData, std_targetData = np.std(trainingData), np.std(targetData)
+        trainingData, targetData = (trainingData - mean_trainingData) / std_trainingData, (targetData - mean_targetData) / std_targetData
+
+        model = self.uNet(trainingData)
+        model.load_weights(modelPath)
+
+        x = np.arange(trainingData.shape[0])
+        np.random.shuffle(x)
+        train = trainingData[x]
+        test = targetData[x]
+
+        print(model.evaluate(x=train, y=test))
 
     def train(self, trainingPath, targetPath, mode = "dir", name="simpleModel"):
         """
@@ -281,8 +303,8 @@ class uNet:
         if mode == "npz":
             trainingData, targetData = self.restore(trainingPath, targetPath)
         elif mode == "dir":
-            trainingData = self.load(trainingPath, "density_f", appendix="", boost=False, fac=3, amount=10, norm=True)
-            targetData = self.load(targetPath, "kernel_f", appendix="", boost=False, fac=3, amount=10, norm=True)
+            trainingData = self.load(trainingPath, "density_f", appendix="", boost=False, fac=3, amount=1, norm=True)
+            targetData = self.load(targetPath, "kernel_f", appendix="", boost=False, fac=3, amount=1, norm=True)
 
         x = np.arange(trainingData.shape[0])
         np.random.shuffle(x)
@@ -315,3 +337,5 @@ class uNet:
         return(model.predict(data))
 
 
+obj = uNet()
+obj.train("data/density/", "data/kernel/")
