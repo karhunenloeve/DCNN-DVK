@@ -300,6 +300,9 @@ class uNet:
         :param amount: amount of files to read to build the dataset
         :param norm: normalization (true/false)
         :param map64: files are 9x9x9 -> 90x90x90, upsamling to 63x63x63 leads to an even representation of 64x64x64 by adding 0 as parameter
+        Example
+        object = uNet()
+        object.train("data/density/", "data/kernel/")
         :return:
         """
         if mode == "npz":
@@ -335,6 +338,14 @@ class uNet:
         return print("Done!")
 
     def predict(self, model, train, goal):
+        """
+        :param model: path to the saved keras model
+        :param train: path to the .mat training file
+        :return: goal: path to the .mat target file
+        Example command:
+        object = uNet()
+        object.predict("model/simpleModel.h5", "data/density/dense_0.mat", "data/kernel/kernel_0.mat")
+        """
         model = load_model(model, custom_objects={"IoU": IoU, "IoU_metric": IoU_metric})
 
         trainingData, targetData = [], []
@@ -363,3 +374,5 @@ class uNet:
         plt.show()
 
         return prediction
+
+
