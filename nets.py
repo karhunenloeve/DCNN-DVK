@@ -41,7 +41,7 @@ from keras import applications
 from keras.models import load_model
 from keras.backend import minimum, maximum
 from keras.applications.vgg19 import VGG19
-from keras import regularizers
+from keras import regularizers, metrics
 from matplotlib.mlab import PCA
 import matplotlib.pyplot as plt
 
@@ -55,9 +55,11 @@ def IoU_metric(y_true, y_pred, smooth=K.epsilon()):
 def IoU(y_true, y_pred):
     return 1 - IoU_metric(y_true, y_pred)
 
-
 def mean_squared_error(y_true, y_pred):
     return losses.mse(y_true, y_pred)
+
+def absolute_error(y_true, y_pred):
+    return np.abs(y_true - y_pred)
 
 def misc(y_true, y_pred):
     return 0.5 * mean_squared_error(y_true, y_pred) + 0.5 * IoU(y_true, y_pred)
@@ -103,9 +105,9 @@ class uNet:
         shaped = data.reshape(v * z, w, x, y)
 
         if norm == True:
-            mean_data = np.mean(shaped)
-            std_data = np.std(shaped)
-            shaped = (shaped - mean_data) / std_data
+            min = shaped.min(axis=(1, 2, 3), keepdims=True)
+            max = shaped.max(axis=(1, 2, 3), keepdims=True)
+            shaped = (shaped - min) / (max-min)
 
         if boost == True:
             for dim in range(len(data.shape) - 2):
@@ -189,7 +191,7 @@ class uNet:
         up1 = UpSampling2D((2,2))(re1)
         noise1 = GaussianNoise(1)(up1)
 
-        conv1 = Conv2D(8, 3, kernel_initializer='lecun_normal', kernel_regularizer=regularizers.l1_l2(0.005))(noise1)
+        conv1 = Conv2D(8, 3, kernel_initializer='lecun_normal', kernel_regularizer=regularizers.l1(0.005))(noise1)
         conv1 = LeakyReLU(alpha=5.5)(conv1)
         conv1 = BatchNormalization()(conv1)
         conv1 = Conv2D(8, 3, kernel_initializer='lecun_normal', kernel_regularizer=regularizers.l2(0.001))(conv1)
@@ -260,7 +262,7 @@ class uNet:
         outputs = Reshape((9,9,9))(conv3)
 
         model = Model(inputs=inputs, outputs=outputs)
-        model.compile(optimizer = Nadam(lr=0.5*1e-4), loss = IoU, metrics = ["MAE", mean_squared_error, IoU_metric])
+        model.compile(optimizer = Nadam(lr=0.5*1e-4), loss = "MSE", metrics = ["MAE", mean_squared_error, IoU_metric])
 
         return model
 
@@ -285,7 +287,7 @@ class uNet:
         train = trainingData[x]
         test = targetData[x]
 
-        print(model.evaluate(x=train, y=test))
+        model.evaluate(x=train, y=test)
 
     def train(self, trainingPath, targetPath, mode = "dir", name="simpleModel"):
         """
@@ -303,8 +305,8 @@ class uNet:
         if mode == "npz":
             trainingData, targetData = self.restore(trainingPath, targetPath)
         elif mode == "dir":
-            trainingData = self.load(trainingPath, "density_f", appendix="", boost=False, fac=3, amount=1, norm=True)
-            targetData = self.load(targetPath, "kernel_f", appendix="", boost=False, fac=3, amount=1, norm=True)
+            trainingData = self.load(trainingPath, "density_f", appendix="", boost=False, fac=3, amount=10, norm=True)
+            targetData = self.load(targetPath, "kernel_f", appendix="", boost=False, fac=3, amount=10, norm=True)
 
         x = np.arange(trainingData.shape[0])
         np.random.shuffle(x)
@@ -319,23 +321,45 @@ class uNet:
         y_valid = targetData_shuffled[quantil_upper:len(targetData)]
 
         # training the model
-        early_stopping = EarlyStopping(monitor='loss', min_delta=1e-4, patience=15, verbose=0, mode='auto')
+        early_stopping = EarlyStopping(monitor='loss', min_delta=1e-6, patience=15, verbose=1, mode='auto')
         model_checkpoint = ModelCheckpoint('./model/checkpoint.hdf5', monitor='loss', verbose=1, save_best_only=False, save_weights_only=False, mode='auto', period=10)
         csv_logger = CSVLogger('./model/model_1.log')
         tbcallback = TensorBoard(log_dir='./Graph', histogram_freq=1, write_grads=True, batch_size=self.batch_size, write_graph=False, write_images=False)
 
         model = self.uNet(trainingData)
-        model_callbacks = [model_checkpoint, csv_logger, tbcallback, early_stopping]
-        model.fit(x, y, batch_size=self.batch_size, epochs=self.epochs, verbose=1, validation_data=(x_valid, y_valid), shuffle=True, callbacks=model_callbacks)
+        model_callbacks = [model_checkpoint, csv_logger, early_stopping] # tbcallback,
+        model.fit(x, y, validation_data=(x_valid, y_valid), batch_size=self.batch_size, epochs=self.epochs, verbose=1, shuffle=True, callbacks=model_callbacks)
         model.save('model/' + name + '.h5')
 
         print("Finished with the training.")
         return print("Done!")
 
-    def predict(self, data, model):
-        model = load_model(model)
-        return(model.predict(data))
+    def predict(self, model, train, goal):
+        model = load_model(model, custom_objects={"IoU": IoU, "IoU_metric": IoU_metric})
 
+        trainingData, targetData = [], []
+        dvk_train, dvk_goal = sio.loadmat(train), sio.loadmat(goal)
+        trainingData.append(dvk_train["density_f"])
+        targetData.append(dvk_goal["kernel_f"])
 
-obj = uNet()
-obj.train("data/density/", "data/kernel/")
+        trainingData, targetData = np.array(trainingData), np.array(targetData)
+        v, w, x, y, z = trainingData.shape
+        trainingData, targetData = trainingData.reshape(v * z, w, x, y), targetData.reshape(v * z, w, x, y)
+
+        max_trainingData, min_trainingData, max_targetData, min_targetData = trainingData.max(axis=(1, 2, 3), keepdims=True), trainingData.min(axis=(1, 2, 3), keepdims=True), targetData.max(axis=(1, 2, 3), keepdims=True), targetData.min(axis=(1, 2, 3), keepdims=True)
+        trainingData, targetData = (trainingData - min_trainingData) / (max_trainingData-min_trainingData), (targetData - min_targetData) / (max_targetData-min_targetData)
+
+        datapoints = trainingData
+        datatargetpoints = targetData
+
+        prediction = model.predict(datapoints)
+        error = np.sqrt((prediction[803]-datatargetpoints[803]) ** 2)
+
+        f, axarr = plt.subplots(1,3)
+        axarr[0].imshow(prediction[803][4], cmap='gray', interpolation='nearest')
+        axarr[1].imshow(datatargetpoints[803][4], cmap='gray', interpolation='nearest')
+        print(datatargetpoints[803][4])
+        axarr[2].imshow(error[4], cmap='gray', interpolation='nearest')
+        plt.show()
+
+        return prediction
