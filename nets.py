@@ -25,6 +25,7 @@ import config as cfg
 import datetime
 import visualize
 import math
+import matplotlib.pyplot as plt
 
 from theano import tensor as T
 from keras.models import *
@@ -43,14 +44,13 @@ from keras.backend import minimum, maximum
 from keras.applications.vgg19 import VGG19
 from keras import regularizers, metrics
 from matplotlib.mlab import PCA
-import matplotlib.pyplot as plt
+from sklearn.decomposition import NMF
 
 def IoU_metric(y_true, y_pred, smooth=K.epsilon()):
     min = K.sum(minimum(K.abs(y_true), K.abs(y_pred)))
     max = K.sum(maximum(K.abs(y_true), K.abs(y_pred)))
     sum = (min + smooth) / (max + smooth)
     return K.mean(sum)
-
 
 def IoU(y_true, y_pred):
     return 1 - IoU_metric(y_true, y_pred)
@@ -107,7 +107,7 @@ class uNet:
         if norm == True:
             min = shaped.min(axis=(1, 2, 3), keepdims=True)
             max = shaped.max(axis=(1, 2, 3), keepdims=True)
-            shaped = (shaped - min) / (max-min)
+            shaped = (0.9 - 0.1) * ((shaped - min) / (max-min)) + 0.1
 
         if boost == True:
             for dim in range(len(data.shape) - 2):
@@ -189,72 +189,71 @@ class uNet:
         
         re1 = Reshape((27,27,1))(inputs)
         up1 = UpSampling2D((2,2))(re1)
-        noise1 = GaussianNoise(1)(up1)
 
-        conv1 = Conv2D(8, 3, kernel_initializer='lecun_normal', kernel_regularizer=regularizers.l1(0.005))(noise1)
+        conv1 = Conv2D(8, 3, kernel_initializer='lecun_uniform', kernel_regularizer=regularizers.l1(0.005))(up1)
         conv1 = LeakyReLU(alpha=5.5)(conv1)
         conv1 = BatchNormalization()(conv1)
-        conv1 = Conv2D(8, 3, kernel_initializer='lecun_normal', kernel_regularizer=regularizers.l2(0.001))(conv1)
+        conv1 = Conv2D(8, 3, kernel_initializer='lecun_uniform', kernel_regularizer=regularizers.l2(0.001))(conv1)
         conv1 = LeakyReLU(alpha=5.5)(conv1)
         conv1 = BatchNormalization()(conv1)
-        conv1 = Conv2D(16, 3, kernel_initializer='lecun_normal', kernel_regularizer=regularizers.l2(0.001))(conv1)
+        conv1 = Conv2D(16, 3, kernel_initializer='lecun_uniform', kernel_regularizer=regularizers.l2(0.001))(conv1)
         conv1 = LeakyReLU(alpha=5.5)(conv1)
         conv1 = BatchNormalization()(conv1)
-        conv1 = Conv2D(16, 3, kernel_initializer='lecun_normal', kernel_regularizer=regularizers.l2(0.001))(conv1)
+        conv1 = Conv2D(16, 3, kernel_initializer='lecun_uniform', kernel_regularizer=regularizers.l2(0.001))(conv1)
         conv1 = LeakyReLU(alpha=5.5)(conv1)
         conv1 = BatchNormalization()(conv1)
-        conv1 = Conv2D(32, 3, kernel_initializer='lecun_normal', kernel_regularizer=regularizers.l2(0.001))(conv1)
+        conv1 = Conv2D(32, 3, kernel_initializer='lecun_uniform', kernel_regularizer=regularizers.l2(0.001))(conv1)
         conv1 = LeakyReLU(alpha=5.5)(conv1)
         conv1 = BatchNormalization()(conv1)
-        conv1 = Conv2D(32, 3, kernel_initializer='lecun_normal', kernel_regularizer=regularizers.l2(0.001))(conv1)
+        conv1 = Conv2D(32, 3, kernel_initializer='lecun_uniform', kernel_regularizer=regularizers.l2(0.001))(conv1)
         conv1 = LeakyReLU(alpha=5.5)(conv1)
         conv1 = BatchNormalization()(conv1)
-        drop1 = Dropout(0.5)(conv1)
+        drop1 = Dropout(0.2)(conv1)
         pool1 = AveragePooling2D(pool_size=2)(conv1)
 
-        conv2 = Conv2D(32, 3, kernel_initializer='lecun_normal', kernel_regularizer=regularizers.l2(0.001))(pool1)
+        conv2 = Conv2D(32, 3, kernel_initializer='lecun_uniform', kernel_regularizer=regularizers.l2(0.001))(pool1)
         conv2 = LeakyReLU(alpha=5.5)(conv2)
         conv2 = BatchNormalization()(conv2)
-        conv2 = Conv2D(32, 3, kernel_initializer='lecun_normal', kernel_regularizer=regularizers.l2(0.001))(conv2)
+        conv2 = Conv2D(32, 3, kernel_initializer='lecun_uniform', kernel_regularizer=regularizers.l2(0.001))(conv2)
         conv2 = LeakyReLU(alpha=5.5)(conv2)
         conv2 = BatchNormalization()(conv2)
-        conv2 = Conv2D(64, 3, kernel_initializer='lecun_normal', kernel_regularizer=regularizers.l2(0.001))(conv2)
+        conv2 = Conv2D(64, 3, kernel_initializer='lecun_uniform', kernel_regularizer=regularizers.l2(0.001))(conv2)
         conv2 = LeakyReLU(alpha=5.5)(conv2)
         conv2 = BatchNormalization()(conv2)
-        conv2 = Conv2D(64, 3, kernel_initializer='lecun_normal', kernel_regularizer=regularizers.l2(0.001))(conv2)
+        conv2 = Conv2D(64, 3, kernel_initializer='lecun_uniform', kernel_regularizer=regularizers.l2(0.001))(conv2)
         conv2 = LeakyReLU(alpha=5.5)(conv2)
         conv2 = BatchNormalization()(conv2)
-        conv2 = Conv2D(32, 3, kernel_initializer='lecun_normal', kernel_regularizer=regularizers.l2(0.001))(conv2)
+        conv2 = Conv2D(32, 3, kernel_initializer='lecun_uniform', kernel_regularizer=regularizers.l2(0.001))(conv2)
         conv2 = LeakyReLU(alpha=5.5)(conv2)
         conv2 = BatchNormalization()(conv2)
-        conv2 = Conv2D(32, 3, kernel_initializer='lecun_normal', kernel_regularizer=regularizers.l2(0.001))(conv2)
+        conv2 = Conv2D(32, 3, kernel_initializer='lecun_uniform', kernel_regularizer=regularizers.l2(0.001))(conv2)
         conv2 = LeakyReLU(alpha=5.5)(conv2)
         conv2 = BatchNormalization()(conv2)
-        conv2 = Conv2D(32, 3, kernel_initializer='lecun_normal', kernel_regularizer=regularizers.l2(0.001))(conv2)
+        conv2 = Conv2D(32, 3, kernel_initializer='lecun_uniform', kernel_regularizer=regularizers.l2(0.001))(conv2)
         conv2 = LeakyReLU(alpha=5.5)(conv2)
         conv2 = BatchNormalization()(conv2)
 
         up3 = UpSampling2D((6,6))(conv2)
         merge3 = concatenate([drop1, up3])
-        conv3 = Conv2D(32, 4, kernel_initializer='lecun_normal', kernel_regularizer=regularizers.l2(0.001))(merge3)
+        conv3 = Conv2D(32, 4, kernel_initializer='lecun_uniform', kernel_regularizer=regularizers.l2(0.001))(merge3)
         conv3 = LeakyReLU(alpha=5.5)(conv3)
         conv3 = BatchNormalization()(conv3)
-        conv3 = Conv2D(32, 3, kernel_initializer='lecun_normal', kernel_regularizer=regularizers.l2(0.001))(conv3)
+        conv3 = Conv2D(32, 3, kernel_initializer='lecun_uniform', kernel_regularizer=regularizers.l2(0.001))(conv3)
         conv3 = LeakyReLU(alpha=5.5)(conv3)
         conv3 = BatchNormalization()(conv3)
-        conv3 = Conv2D(16, 3, kernel_initializer='lecun_normal', kernel_regularizer=regularizers.l2(0.001))(conv3)
+        conv3 = Conv2D(16, 3, kernel_initializer='lecun_uniform', kernel_regularizer=regularizers.l2(0.001))(conv3)
         conv3 = LeakyReLU(alpha=5.5)(conv3)
         conv3 = BatchNormalization()(conv3)
-        conv3 = Conv2D(16, 3, kernel_initializer='lecun_normal', kernel_regularizer=regularizers.l2(0.001))(conv3)
+        conv3 = Conv2D(16, 3, kernel_initializer='lecun_uniform', kernel_regularizer=regularizers.l2(0.001))(conv3)
         conv3 = LeakyReLU(alpha=5.5)(conv3)
         conv3 = BatchNormalization()(conv3)
-        conv3 = Conv2D(8, 3, kernel_initializer='lecun_normal', kernel_regularizer=regularizers.l2(0.001))(conv3)
+        conv3 = Conv2D(8, 3, kernel_initializer='lecun_uniform', kernel_regularizer=regularizers.l2(0.001))(conv3)
         conv3 = LeakyReLU(alpha=5.5)(conv3)
         conv3 = BatchNormalization()(conv3)
-        conv3 = Conv2D(8, 3, kernel_initializer='lecun_normal', kernel_regularizer=regularizers.l2(0.001))(conv3)
+        conv3 = Conv2D(8, 3, kernel_initializer='lecun_uniform', kernel_regularizer=regularizers.l2(0.001))(conv3)
         conv3 = LeakyReLU(alpha=5.5)(conv3)
         conv3 = BatchNormalization()(conv3)
-        conv3 = Conv2D(4, 3, kernel_initializer='lecun_normal', kernel_regularizer=regularizers.l2(0.001))(conv3)
+        conv3 = Conv2D(4, 3, kernel_initializer='lecun_uniform', kernel_regularizer=regularizers.l2(0.001))(conv3)
         conv3 = LeakyReLU(alpha=5.5)(conv3)
         conv3 = BatchNormalization()(conv3)
 
@@ -262,7 +261,8 @@ class uNet:
         outputs = Reshape((9,9,9))(conv3)
 
         model = Model(inputs=inputs, outputs=outputs)
-        model.compile(optimizer = Nadam(lr=0.5*1e-4), loss = "MSE", metrics = ["MAE", mean_squared_error, IoU_metric])
+        model.summary()
+        model.compile(optimizer = Nadam(lr=1e-5), loss = IoU, metrics = ["MAE", mean_squared_error, IoU_metric])
 
         return model
 
@@ -358,7 +358,7 @@ class uNet:
         trainingData, targetData = trainingData.reshape(v * z, w, x, y), targetData.reshape(v * z, w, x, y)
 
         max_trainingData, min_trainingData, max_targetData, min_targetData = trainingData.max(axis=(1, 2, 3), keepdims=True), trainingData.min(axis=(1, 2, 3), keepdims=True), targetData.max(axis=(1, 2, 3), keepdims=True), targetData.min(axis=(1, 2, 3), keepdims=True)
-        trainingData, targetData = (trainingData - min_trainingData) / (max_trainingData-min_trainingData), (targetData - min_targetData) / (max_targetData-min_targetData)
+        trainingData, targetData = (0.9-0.1)*(trainingData - min_trainingData) / (max_trainingData-min_trainingData) + 0.1, (0.9-0.1)*(targetData - min_targetData) / (max_targetData-min_targetData) +0.1
 
         datapoints = trainingData
         datatargetpoints = targetData
@@ -376,3 +376,6 @@ class uNet:
         return prediction
 
 
+object = uNet()
+#object.predict("model/simpleModel.h5", "data/density/dense_0.mat", "data/kernel/kernel_0.mat")
+object.train("data/density/", "data/kernel/")
