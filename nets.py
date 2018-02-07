@@ -43,8 +43,9 @@ from keras.models import load_model
 from keras.backend import minimum, maximum
 from keras.applications.vgg19 import VGG19
 from keras import regularizers, metrics
-from matplotlib.mlab import PCA
-from sklearn.decomposition import NMF
+from sklearn.decomposition import NMF, PCA
+from matplotlib.mlab import PCA as matpca
+
 
 def IoU_metric(y_true, y_pred, smooth=K.epsilon()):
     min = K.sum(minimum(K.abs(y_true), K.abs(y_pred)))
@@ -68,6 +69,8 @@ class uNet:
     trainQuantil = 0
     batch_size = 0
     epochs = 0
+    PCA = False
+    ndim = 9
 
     def __init__(self):
         self.trainQuantil = cfg.settings['trainQuantil']
@@ -166,16 +169,19 @@ class uNet:
 
     def pca(self, trainingData):
         # performing PCA with the Data
-        a, b, c, d = trainingData_shuffled.shape
+        a, b, c, d = trainingData.shape
         trainingData = trainingData.reshape(a, b * c * d)
-        myPCA = PCA(trainingData)
-        variance = myPCA.s / np.sum(myPCA.s)
+        myPCA = PCA(self.ndim)
+        dataPCA = matpca(trainingData)
 
-        plt.plot(variance)
-        plt.show()
+        plt.figure(1)
+        plt.plot(dataPCA.fracs)
+        plt.xlabel('Dimensionen', fontsize=12)
+        plt.ylabel('Anteil an der Gesamtvarianz', fontsize=12)
+        plt.savefig("model/test.svg")
 
-        trainingData = myPCA.Y
-        trainingData = trainingData.reshape(10000, 9, 9, 9)
+        trainingData = myPCA.fit_transform(trainingData)
+        trainingData = trainingData.reshape(10000, 3, 3, 1)
 
         return trainingData
 
@@ -313,7 +319,11 @@ class uNet:
 
         x = np.arange(trainingData.shape[0])
         np.random.shuffle(x)
-        trainingData_shuffled = trainingData[x]
+        if self.PCA == False:
+            trainingData_shuffled = trainingData[x]
+        else:
+            trainingData_shuffled = self.pca(trainingData[x])
+
         targetData_shuffled = targetData[x]
 
         # separating the data
@@ -329,7 +339,7 @@ class uNet:
         csv_logger = CSVLogger('./model/model_1.log')
         tbcallback = TensorBoard(log_dir='./Graph', histogram_freq=1, write_grads=True, batch_size=self.batch_size, write_graph=False, write_images=False)
 
-        model = self.uNet(trainingData)
+        model = self.uNet(trainingData_shuffled)
         model_callbacks = [model_checkpoint, csv_logger, early_stopping] # tbcallback,
         model.fit(x, y, validation_data=(x_valid, y_valid), batch_size=self.batch_size, epochs=self.epochs, verbose=1, shuffle=True, callbacks=model_callbacks)
         model.save('model/' + name + '.h5')
