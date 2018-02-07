@@ -384,8 +384,3 @@ class uNet:
         plt.show()
 
         return prediction
-
-
-object = uNet()
-#object.predict("model/simpleModel.h5", "data/density/dense_0.mat", "data/kernel/kernel_0.mat")
-object.train("data/density/", "data/kernel/")
