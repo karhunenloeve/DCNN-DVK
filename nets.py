@@ -23,7 +23,7 @@ import scipy.io as sio
 import os
 import config as cfg
 import datetime
-import visualize
+import visualize as vs
 import math
 import matplotlib.pyplot as plt
 
@@ -267,8 +267,9 @@ class uNet:
         outputs = Reshape((9,9,9))(conv3)
 
         model = Model(inputs=inputs, outputs=outputs)
+        model.load_weights("model/simpleModel.h5")
         model.summary()
-        model.compile(optimizer = Nadam(lr=1e-5), loss = IoU, metrics = ["MAE", mean_squared_error, IoU_metric])
+        model.compile(optimizer = Nadam(lr=1e-4), loss = IoU, metrics = ["MAE", mean_squared_error, IoU_metric])
 
         return model
 
@@ -347,7 +348,7 @@ class uNet:
         print("Finished with the training.")
         return print("Done!")
 
-    def predict(self, model, train, goal):
+    def predict(self, model, train, goal, organ="liver", print_x = 77, print_y = 5):
         """
         :param model: path to the saved keras model
         :param train: path to the .mat training file
@@ -374,13 +375,13 @@ class uNet:
         datatargetpoints = targetData
 
         prediction = model.predict(datapoints)
-        error = np.sqrt((prediction[803]-datatargetpoints[803]) ** 2)
+        x,y = print_x, print_y
 
-        f, axarr = plt.subplots(1,3)
-        axarr[0].imshow(prediction[803][4], cmap='gray', interpolation='nearest')
-        axarr[1].imshow(datatargetpoints[803][4], cmap='gray', interpolation='nearest')
-        print(datatargetpoints[803][4])
-        axarr[2].imshow(error[4], cmap='gray', interpolation='nearest')
-        plt.show()
+        input = datapoints[x][y]
+        target = datatargetpoints[x][y]
+        prediction = prediction[x][y]
+        error = np.sqrt((target - prediction) ** 2)
+        data = [input, target, prediction, error]
 
+        vs.show_field(data, organ=organ)
         return prediction
