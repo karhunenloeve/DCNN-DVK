@@ -30,9 +30,9 @@ import matplotlib.pyplot as plt
 from theano import tensor as T
 from keras.models import *
 from keras.layers import Conv2D, AveragePooling2D, UpSampling2D, LocallyConnected2D, ZeroPadding2D, Cropping2D, ConvLSTM2D, LSTM, MaxPooling2D, SeparableConv2D
-from keras.layers import UpSampling3D, MaxPooling3D, Conv3D, LeakyReLU, GaussianNoise
+from keras.layers import UpSampling3D, MaxPooling3D, Conv3D, LeakyReLU, GaussianNoise, add, AveragePooling3D
 from keras.layers import Dense, Dropout, Activation, BatchNormalization, Flatten, Reshape, Input, AlphaDropout, GaussianDropout
-from keras.layers.merge import concatenate
+from keras.layers.merge import concatenate, Add
 from keras.optimizers import Nadam
 from keras import losses
 from keras.callbacks import EarlyStopping, ReduceLROnPlateau, CSVLogger, ModelCheckpoint, TensorBoard
@@ -215,7 +215,7 @@ class uNet:
         conv1 = LeakyReLU(alpha=5.5)(conv1)
         conv1 = BatchNormalization()(conv1)
         drop1 = Dropout(0.2)(conv1)
-        pool1 = AveragePooling2D(pool_size=2)(conv1)
+        pool1 = AveragePooling2D(pool_size=2)(drop1)
 
         conv2 = Conv2D(32, 3, kernel_initializer='lecun_uniform', kernel_regularizer=regularizers.l2(0.001))(pool1)
         conv2 = LeakyReLU(alpha=5.5)(conv2)
@@ -267,7 +267,6 @@ class uNet:
         outputs = Reshape((9,9,9))(conv3)
 
         model = Model(inputs=inputs, outputs=outputs)
-        model.load_weights("model/simpleModel.h5")
         model.summary()
         model.compile(optimizer = Nadam(lr=1e-4), loss = IoU, metrics = ["MAE", mean_squared_error, IoU_metric])
 
@@ -385,3 +384,8 @@ class uNet:
 
         vs.show_field(data, organ=organ)
         return prediction
+
+
+
+obj = uNet()
+obj.train("data/density/", "data/kernel/")
