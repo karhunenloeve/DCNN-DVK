@@ -4,4 +4,5 @@ Der Transfer von Massendichten in die sog. Dosis-Voxel-Kernel entspricht einem B
 
 ## Simulation der DVKs
 <center><img src="https://github.com/karhunenloeve/DeepLearningCNN/blob/master/img/dvk_illu.jpg" alt="DVK Illustration" width="500px"></center>
-
+Aus der CT-Bildgebung werden Ausschnitte entnommen, die man als Massenkernel bezeichnet. Das gesamte CT-Bild lässt sich in diese Massenkernel zerlegen. Anschließend wird auf den Massenkernel die Monte-Carlo Simulation durchgeführt. Es wird die Strahlungsenergie eines Isotops im Zentrum des Massenkernels simuliert. Als Ergebnis erhält man die Dosis-Voxel-Kerne. Diese werden anschließend zur Faltung einer SPECT-Bildgebung verwendet, um die Verteilung der absorbierten Strahlungsdosis zu erhalen.
+Der Transfer von Massenkernen zu Dosis-Voxel-Kernen wird durch das neuronale Netz ersetzt.
