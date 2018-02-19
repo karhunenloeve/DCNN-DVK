@@ -1,6 +1,9 @@
 # DVK-uNet – Neuronales Netz zur Schätzung von Dosis-Voxel-Kernen
 Für die Berechnung der absorbierten Strahlungsdosis in der Dosimetrie werden Monte-Carlo Simulationen auf Gewebedichten aus einer CT-Bildgebung vollführt, um die deponierte Energie zu berechnen.
-Der Transfer von Massendichten in die sog. Dosis-Voxel-Kernel entspricht einem Bild zu Bild Transfer. Dieser Transfer kann mit Hilfe von Verfahren aus der Bildrekonstruktion und Bildsegmentierung gelernt werden. Dosis-Voxel-Kerne zu simulieren ist äußerst zeitintensiv und benötigt große Ressourcen. Im Folgenden wird der Algorithmus vorgestellt, mit dessen Hilfe eine alternative und schnelle Lösung für die Berechnung von DVKs zur Verfügung gestellt wird.
+
+Der Transfer von Massendichten in die sog. Dosis-Voxel-Kernel entspricht einem Bild zu Bild Transfer. Dieser Transfer kann mit Hilfe von Verfahren aus der Bildrekonstruktion und Bildsegmentierung gelernt werden. Dosis-Voxel-Kerne zu simulieren ist äußerst zeitintensiv und benötigt große Ressourcen.
+
+Im Folgenden wird der Algorithmus vorgestellt, mit dessen Hilfe eine alternative und schnelle Lösung für die Berechnung von DVKs zur Verfügung gestellt wird.
 
 ## Simulation der DVKs
 
