@@ -5,6 +5,8 @@ Der Transfer von Massendichten in die sog. Dosis-Voxel-Kernel entspricht einem B
 
 Im Folgenden wird der Algorithmus vorgestellt, mit dessen Hilfe eine alternative und schnelle Lösung für die Berechnung von DVKs zur Verfügung gestellt wird.
 
+---
+
 ## Simulation der DVKs
 
 <center><img src="https://github.com/karhunenloeve/DeepLearningCNN/blob/master/img/dvk_illu.jpg" alt="DVK Illustration" width="400px"></center>
