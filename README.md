@@ -14,3 +14,7 @@ Im Folgenden wird der Algorithmus vorgestellt, mit dessen Hilfe eine alternative
 Aus der CT-Bildgebung werden Ausschnitte entnommen, die man als Massenkernel bezeichnet. Das gesamte CT-Bild lässt sich in diese Massenkernel zerlegen. Anschließend wird auf den Massenkernel die Monte-Carlo Simulation durchgeführt. Es wird die Strahlungsenergie eines Isotops im Zentrum des Massenkernels simuliert. Als Ergebnis erhält man die Dosis-Voxel-Kerne. Diese werden anschließend zur Faltung einer SPECT-Bildgebung verwendet, um die Verteilung der absorbierten Strahlungsdosis zu erhalten.
 
 Der Transfer von Massenkernen zu Dosis-Voxel-Kernen wird durch das neuronale Netz ersetzt.
+
+---
+
+## Über Keras
