@@ -16,5 +16,3 @@ Aus der CT-Bildgebung werden Ausschnitte entnommen, die man als Massenkernel bez
 Der Transfer von Massenkernen zu Dosis-Voxel-Kernen wird durch das neuronale Netz ersetzt.
 
 ---
-
-## Über Keras
