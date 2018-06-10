@@ -1,7 +1,7 @@
 #!/usr/bin/python
 
 """
-Copyright 2017 Luciano Melodia
+Copyright 2018 Luciano Melodia
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
 documentation files (the "Software"), to deal in the Software without restriction, including without limitation the
@@ -18,32 +18,24 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR TH
 DEALINGS IN THE SOFTWARE.
 """
 
-import numpy as np
 import scipy.io as sio
-import os
 import config as cfg
-import datetime
 import visualize as vs
-import math
 import matplotlib.pyplot as plt
+import numpy as np
+import os
 
-from theano import tensor as T
 from keras.models import *
-from keras.layers import Conv2D, AveragePooling2D, UpSampling2D, LocallyConnected2D, ZeroPadding2D, Cropping2D, ConvLSTM2D, LSTM, MaxPooling2D, SeparableConv2D
-from keras.layers import UpSampling3D, MaxPooling3D, Conv3D, LeakyReLU, GaussianNoise, add, AveragePooling3D
-from keras.layers import Dense, Dropout, Activation, BatchNormalization, Flatten, Reshape, Input, AlphaDropout, GaussianDropout
-from keras.layers.merge import concatenate, Add
+from keras.layers import Conv2D, Deconv2D, UpSampling2D
+from keras.layers import LeakyReLU
+from keras.layers import Dense, Dropout, BatchNormalization, Flatten, Reshape, Input
+from keras.layers.merge import multiply
 from keras.optimizers import Nadam
 from keras import losses
-from keras.callbacks import EarlyStopping, ReduceLROnPlateau, CSVLogger, ModelCheckpoint, TensorBoard
-from scipy import stats
-from numpy import mean, std
-from keras import applications
+from keras.callbacks import EarlyStopping, CSVLogger, ModelCheckpoint, TensorBoard
 from keras.models import load_model
 from keras.backend import minimum, maximum
-from keras.applications.vgg19 import VGG19
-from keras import regularizers, metrics
-from sklearn.decomposition import NMF, PCA
+from sklearn.decomposition import PCA
 from matplotlib.mlab import PCA as matpca
 
 
@@ -58,6 +50,10 @@ def IoU(y_true, y_pred):
 
 def mean_squared_error(y_true, y_pred):
     return losses.mse(y_true, y_pred)
+
+def clinic_loss(y_true, y_pred):
+    loss = K.sum(K.tf.multiply(((y_true - y_pred)**2),(y_true/K.sum(y_true))))*100
+    return loss
 
 def absolute_error(y_true, y_pred):
     return np.abs(y_true - y_pred)
@@ -77,7 +73,7 @@ class uNet:
         self.batch_size = cfg.settings['batch_size']
         self.epochs = cfg.settings['epochs']
 
-    def load(self, path, name, appendix="", save=False, boost=False, fac=10, amount=10, norm=False):
+    def load(self, path, name, appendix="", save=False, boost=False, fac=10, amount=30, norm=False):
         """
         :param path: .mat files required for reading with saved double array (no struct arrays here)
         :param name: name of the resulting file
@@ -93,38 +89,35 @@ class uNet:
         """
         files = sorted(os.listdir(path))
         target = os.path.realpath("data")
-        data = []
+        data = np.empty([9,9,9,0])
 
         for f in files:
             amount = amount - 1
+            f=f.replace("._","")
             if f.endswith(".mat"):
                 dvk = sio.loadmat(path + f)
-                data.append(dvk[name])
+                data = np.concatenate((data, dvk[name]), axis=3)
                 if amount == 0:
                     break
 
-        data = np.array(data)
-        v, w, x, y, z = data.shape
-        shaped = data.reshape(v * z, w, x, y)
+        data = data.T
 
         if norm == True:
-            min = shaped.min(axis=(1, 2, 3), keepdims=True)
-            max = shaped.max(axis=(1, 2, 3), keepdims=True)
-            shaped = (0.9 - 0.1) * ((shaped - min) / (max-min)) + 0.1
+            data = (0.9-0.1) * (data - data.min(axis=(0,1,2,3), keepdims=False)) / (data.max(axis=(0,1,2,3), keepdims=False)-data.min(axis=(0,1,2,3), keepdims=False)) + 0.1
 
         if boost == True:
             for dim in range(len(data.shape) - 2):
                 if dim == 0:
                     pass
                 else:
-                    shaped = np.repeat(shaped, fac, axis=dim)
+                    data = np.repeat(data, fac, axis=dim)
 
         if save == True:
-            np.savez_compressed(target + '/' + name + appendix, a = shaped)
+            np.savez_compressed(target + '/' + name + appendix, a = data)
 
-        return(shaped)
+        return(data)
 
-    def store(self, path, name, appendix="", save=False, boost=False, fac=10, amount=10, norm=False):
+    def store(self, path, name, appendix="", save=False, boost=False, fac=10, amount=30, norm=False):
         self.load(path, name, appendix, save, boost, fac, amount, norm)
         return "Data has been loaded."
 
@@ -148,7 +141,6 @@ class uNet:
         :return:
         """
         import matplotlib.pyplot as plt
-        from mpl_toolkits.mplot3d import Axes3D
 
         z, x, y = data.nonzero()
         fig = plt.figure()
@@ -190,11 +182,11 @@ class uNet:
         :param trainingData: numpy array of the training data.
         :return:
         """
-        input_shape = (trainingData.shape)[1:4]
+        input_shape = (9, 9, 9)
         inputs = Input(shape=input_shape)
-        
-        re1 = Reshape((27,27,1))(inputs)
-        up1 = UpSampling2D((2,2))(re1)
+
+        re1 = Reshape((27, 27, 1))(inputs)
+        up1 = UpSampling2D((2, 2))(re1)
 
         conv1 = Conv2D(8, 3, kernel_initializer='lecun_uniform', kernel_regularizer=regularizers.l1(0.005))(up1)
         conv1 = LeakyReLU(alpha=5.5)(conv1)
@@ -239,7 +231,7 @@ class uNet:
         conv2 = LeakyReLU(alpha=5.5)(conv2)
         conv2 = BatchNormalization()(conv2)
 
-        up3 = UpSampling2D((6,6))(conv2)
+        up3 = UpSampling2D((6, 6))(conv2)
         merge3 = concatenate([drop1, up3])
         conv3 = Conv2D(32, 4, kernel_initializer='lecun_uniform', kernel_regularizer=regularizers.l2(0.001))(merge3)
         conv3 = LeakyReLU(alpha=5.5)(conv3)
@@ -264,11 +256,13 @@ class uNet:
         conv3 = BatchNormalization()(conv3)
 
         conv3 = Conv2D(1, 1, activation="sigmoid")(conv3)
-        outputs = Reshape((9,9,9))(conv3)
+
+        outputs = Reshape((9, 9, 9))(conv3)
 
         model = Model(inputs=inputs, outputs=outputs)
         model.summary()
-        model.compile(optimizer = Nadam(lr=1e-4), loss = IoU, metrics = ["MAE", mean_squared_error, IoU_metric])
+        model.load_weights("model/checkpoint.hdf5")
+        model.compile(optimizer = Nadam(lr=1e-5), loss = IoU, metrics = ["MAE", mean_squared_error, IoU_metric, clinic_loss])
 
         return model
 
@@ -295,7 +289,7 @@ class uNet:
 
         model.evaluate(x=train, y=test)
 
-    def train(self, trainingPath, targetPath, mode = "dir", name="simpleModel"):
+    def train(self, trainingPath, targetPath, mode = "dir", name="model"):
         """
         :param trainingPath: path to the npz file of the training data or path to the directory of the training data
         :param targetPath: path to the npz file of the target data or path to the directory of the target data
@@ -314,8 +308,10 @@ class uNet:
         if mode == "npz":
             trainingData, targetData = self.restore(trainingPath, targetPath)
         elif mode == "dir":
-            trainingData = self.load(trainingPath, "density_f", appendix="", boost=False, fac=3, amount=10, norm=True)
-            targetData = self.load(targetPath, "kernel_f", appendix="", boost=False, fac=3, amount=10, norm=True)
+            trainingPath=trainingPath.replace("._","")
+            targetPath=targetPath.replace("._","")
+            trainingData = self.load(trainingPath, "density_f", appendix="", boost=False, fac=3, amount=30, norm=True)
+            targetData = self.load(targetPath, "kernel_f", appendix="", boost=False, fac=3, amount=30, norm=True)
 
         x = np.arange(trainingData.shape[0])
         np.random.shuffle(x)
@@ -334,7 +330,7 @@ class uNet:
         y_valid = targetData_shuffled[quantil_upper:len(targetData)]
 
         # training the model
-        early_stopping = EarlyStopping(monitor='loss', min_delta=1e-6, patience=15, verbose=1, mode='auto')
+        early_stopping = EarlyStopping(monitor='loss', min_delta=1e-6, patience=50, verbose=1, mode='auto')
         model_checkpoint = ModelCheckpoint('./model/checkpoint.hdf5', monitor='loss', verbose=1, save_best_only=False, save_weights_only=False, mode='auto', period=10)
         csv_logger = CSVLogger('./model/model_1.log')
         tbcallback = TensorBoard(log_dir='./Graph', histogram_freq=1, write_grads=True, batch_size=self.batch_size, write_graph=False, write_images=False)
@@ -343,11 +339,9 @@ class uNet:
         model_callbacks = [model_checkpoint, csv_logger, early_stopping] # tbcallback,
         model.fit(x, y, validation_data=(x_valid, y_valid), batch_size=self.batch_size, epochs=self.epochs, verbose=1, shuffle=True, callbacks=model_callbacks)
         model.save('model/' + name + '.h5')
+        return "Done!"
 
-        print("Finished with the training.")
-        return print("Done!")
-
-    def predict(self, model, train, goal, organ="liver", print_x = 77, print_y = 5):
+    def predict(self, model, train, goal, organ="pizza", print_x = 33, print_y = 4, plot = True):
         """
         :param model: path to the saved keras model
         :param train: path to the .mat training file
@@ -356,36 +350,33 @@ class uNet:
         object = uNet()
         object.predict("model/simpleModel.h5", "data/density/dense_0.mat", "data/kernel/kernel_0.mat")
         """
-        model = load_model(model, custom_objects={"IoU": IoU, "IoU_metric": IoU_metric})
+        model = load_model(model, custom_objects={"IoU": IoU, "IoU_metric": IoU_metric, "clinic_loss": clinic_loss})
 
-        trainingData, targetData = [], []
+        trainingData, targetData = np.empty([9,9,9,0]), np.empty([9,9,9,0])
+
         dvk_train, dvk_goal = sio.loadmat(train), sio.loadmat(goal)
-        trainingData.append(dvk_train["density_f"])
-        targetData.append(dvk_goal["kernel_f"])
-
+        trainingData = np.concatenate((trainingData, dvk_train["density_f"]), axis=3)
+        targetData = np.concatenate((targetData, dvk_goal["kernel_f"]), axis=3)
         trainingData, targetData = np.array(trainingData), np.array(targetData)
-        v, w, x, y, z = trainingData.shape
-        trainingData, targetData = trainingData.reshape(v * z, w, x, y), targetData.reshape(v * z, w, x, y)
 
-        max_trainingData, min_trainingData, max_targetData, min_targetData = trainingData.max(axis=(1, 2, 3), keepdims=True), trainingData.min(axis=(1, 2, 3), keepdims=True), targetData.max(axis=(1, 2, 3), keepdims=True), targetData.min(axis=(1, 2, 3), keepdims=True)
-        trainingData, targetData = (0.9-0.1)*(trainingData - min_trainingData) / (max_trainingData-min_trainingData) + 0.1, (0.9-0.1)*(targetData - min_targetData) / (max_targetData-min_targetData) +0.1
+        trainingData = np.array(trainingData).T
+        targetData = np.array(targetData).T
+
+        trainingData = (0.9-0.1) * (trainingData - trainingData.min(axis=(0,1,2,3), keepdims=False)) / (trainingData.max(axis=(0,1,2,3), keepdims=False)-trainingData.min(axis=(0,1,2,3), keepdims=False)) + 0.1
+        targetData = (0.9-0.1) * (targetData - targetData.min(axis=(0,1,2,3), keepdims=False)) / (targetData.max(axis=(0,1,2,3), keepdims=False)-targetData.min(axis=(0,1,2,3), keepdims=False)) + 0.1
 
         datapoints = trainingData
         datatargetpoints = targetData
-
-        prediction = model.predict(datapoints)
         x,y = print_x, print_y
 
-        input = datapoints[x][y]
-        target = datatargetpoints[x][y]
-        prediction = prediction[x][y]
-        error = np.sqrt((target - prediction) ** 2)
-        data = [input, target, prediction, error]
+        prediction = model.predict(datapoints)
 
-        vs.show_field(data, organ=organ)
+        eingang = datapoints[x][y]
+        ziel = datatargetpoints[x][y]
+        vorhersage = prediction[x][y]
+        fehler = np.sqrt((ziel - vorhersage) ** 2)
+
+        if plot == True:
+            data = [eingang, ziel, vorhersage, fehler]
+            vs.show_field(data, organ=organ)
         return prediction
-
-
-
-obj = uNet()
-obj.train("data/density/", "data/kernel/")
