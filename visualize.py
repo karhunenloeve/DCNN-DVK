@@ -2,35 +2,18 @@ import numpy.ma as ma
 import numpy as np
 import matplotlib.pyplot as plt
 
-from keras import backend as K
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 def show_field(data, organ="liver"):
     fig, axes = plt.subplots(nrows=2, ncols=2)
     counter = 0
     for ax in axes.flat:
-        if counter == 2 or counter == 1:
-            im = ax.imshow(data[counter], cmap="bone", vmin=np.amin(data[2]), vmax=np.amax(data[1]))
-            ax.set_adjustable('box-forced')
-            ax.autoscale(False)
-            ax.axis("off")
-            plt.colorbar(im, ax=ax)
-
-            if counter == len(data) - 1:
-                break
-            else:
-                counter += 1
-        else:
-            im = ax.imshow(data[counter], cmap="bone", vmin=np.amin(data[counter]), vmax=np.amax(data[counter]))
-            ax.set_adjustable('box-forced')
-            ax.autoscale(False)
-            ax.axis("off")
-            plt.colorbar(im, ax=ax)
-
-            if counter == len(data) - 1:
-                break
-            else:
-                counter += 1
+        im = ax.imshow(data[counter], cmap="bone")
+        ax.set_adjustable('box-forced')
+        ax.autoscale(False)
+        ax.axis("off")
+        plt.colorbar(im, ax=ax)
+        counter += 1
     plt.savefig(organ + ".svg")
 
 def nice_imshow(ax, data, vmin=None, vmax=None, cmap=None):
