@@ -21,9 +21,7 @@ DEALINGS IN THE SOFTWARE.
 import scipy.io as sio
 import config as cfg
 import visualize as vs
-import matplotlib.pyplot as plt
-import numpy as np
-import os
+from sklearn.preprocessing import MinMaxScaler
 
 from keras.models import *
 from keras.layers import Conv2D, Deconv2D, UpSampling2D
@@ -35,9 +33,6 @@ from keras import losses
 from keras.callbacks import EarlyStopping, CSVLogger, ModelCheckpoint, TensorBoard
 from keras.models import load_model
 from keras.backend import minimum, maximum
-from sklearn.decomposition import PCA
-from matplotlib.mlab import PCA as matpca
-
 
 def IoU_metric(y_true, y_pred, smooth=K.epsilon()):
     min = K.sum(minimum(K.abs(y_true), K.abs(y_pred)))
@@ -52,28 +47,20 @@ def mean_squared_error(y_true, y_pred):
     return losses.mse(y_true, y_pred)
 
 def clinic_loss(y_true, y_pred):
-    loss = K.sum(K.tf.multiply(((y_true - y_pred)**2),(y_true/K.sum(y_true))))*100
+    loss = K.sum(K.tf.multiply(((y_true - y_pred)**2),(y_true/K.sum(y_true)))) * 100
     return loss
-
-def absolute_error(y_true, y_pred):
-    return np.abs(y_true - y_pred)
-
-def misc(y_true, y_pred):
-    return 0.5 * mean_squared_error(y_true, y_pred) + 0.5 * IoU(y_true, y_pred)
 
 class uNet:
     trainQuantil = 0
     batch_size = 0
     epochs = 0
-    PCA = False
-    ndim = 9
 
     def __init__(self):
         self.trainQuantil = cfg.settings['trainQuantil']
         self.batch_size = cfg.settings['batch_size']
         self.epochs = cfg.settings['epochs']
 
-    def load(self, path, name, appendix="", save=False, boost=False, fac=10, amount=30, norm=False):
+    def load(self, path, name, appendix=None, save=False, boost=False, fac=None, norm=False):
         """
         :param path: .mat files required for reading with saved double array (no struct arrays here)
         :param name: name of the resulting file
@@ -88,8 +75,8 @@ class uNet:
         Data has to be 4-dim. Path specifies the path to the data folder.
         """
         files = sorted(os.listdir(path))
-        target = os.path.realpath("data")
-        data = np.empty([9,9,9,0])
+        data = np.empty([9,9,9,0], dtype='longfloat')
+        amount = len(files)
 
         for f in files:
             amount = amount - 1
@@ -103,21 +90,13 @@ class uNet:
         data = data.T
 
         if norm == True:
-            data = (0.9-0.1) * (data - data.min(axis=(0,1,2,3), keepdims=False)) / (data.max(axis=(0,1,2,3), keepdims=False)-data.min(axis=(0,1,2,3), keepdims=False)) + 0.1
-
-        if boost == True:
-            for dim in range(len(data.shape) - 2):
-                if dim == 0:
-                    pass
-                else:
-                    data = np.repeat(data, fac, axis=dim)
-
-        if save == True:
-            np.savez_compressed(target + '/' + name + appendix, a = data)
+            x_min = data.min()
+            x_max = data.max()
+            data = (data - x_min) / (x_max - x_min)
 
         return(data)
 
-    def store(self, path, name, appendix="", save=False, boost=False, fac=10, amount=30, norm=False):
+    def store(self, path, name, appendix="", save=False, boost=False, fac=10, amount=10, norm=False):
         self.load(path, name, appendix, save, boost, fac, amount, norm)
         return "Data has been loaded."
 
@@ -131,52 +110,6 @@ class uNet:
         target = np.load(target_path)
         return start['a'], target['a']
 
-    def plot_data(self, data, color="red", save=True, name="figure", datatype=".svg"):
-        """
-        :param data: one 3-Dim datapoint to be displayed in a mesh grid
-        :param color: set the color of the mesh grid, either as string or RGB
-        :param save: save as .svg image
-        :param name: the name of the images, which has to be saved
-        :param datatype: datatype of the images, which has to be saved
-        :return:
-        """
-        import matplotlib.pyplot as plt
-
-        z, x, y = data.nonzero()
-        fig = plt.figure()
-        ax = fig.add_subplot(111, projection='3d')
-        ax.scatter(x, y, -z, zdir='z', c=color)
-
-        if save == True:
-            plt.savefig(name + datatype)
-
-    def get_layer_content(self, model):
-        inp = model.input  # input placeholder
-        outputs = [layer.output for layer in model.layers]  # all layer outputs
-        functors = [K.function([inp] + [K.learning_phase()], [out]) for out in outputs]  # evaluation functions
-
-        test = np.random.random(input_shape)[np.newaxis, ...]
-        layer_outs = [func([test, 1.]) for func in functors]
-        return layer_outs
-
-    def pca(self, trainingData):
-        # performing PCA with the Data
-        a, b, c, d = trainingData.shape
-        trainingData = trainingData.reshape(a, b * c * d)
-        myPCA = PCA(self.ndim)
-        dataPCA = matpca(trainingData)
-
-        plt.figure(1)
-        plt.plot(dataPCA.fracs)
-        plt.xlabel('Dimensionen', fontsize=12)
-        plt.ylabel('Anteil an der Gesamtvarianz', fontsize=12)
-        plt.savefig("model/test.svg")
-
-        trainingData = myPCA.fit_transform(trainingData)
-        trainingData = trainingData.reshape(10000, 3, 3, 1)
-
-        return trainingData
-
     def uNet(self, trainingData):
         """
         :param trainingData: numpy array of the training data.
@@ -186,78 +119,74 @@ class uNet:
         inputs = Input(shape=input_shape)
 
         re1 = Reshape((27, 27, 1))(inputs)
-        up1 = UpSampling2D((2, 2))(re1)
+        up1 = UpSampling2D(size=(2, 2), data_format='channels_last')(re1)
 
-        conv1 = Conv2D(8, 3, kernel_initializer='lecun_uniform', kernel_regularizer=regularizers.l1(0.005))(up1)
+        conv1 = Conv2D(8, 3, kernel_initializer="uniform")(up1)
         conv1 = LeakyReLU(alpha=5.5)(conv1)
         conv1 = BatchNormalization()(conv1)
-        conv1 = Conv2D(8, 3, kernel_initializer='lecun_uniform', kernel_regularizer=regularizers.l2(0.001))(conv1)
-        conv1 = LeakyReLU(alpha=5.5)(conv1)
-        conv1 = BatchNormalization()(conv1)
-        conv1 = Conv2D(16, 3, kernel_initializer='lecun_uniform', kernel_regularizer=regularizers.l2(0.001))(conv1)
-        conv1 = LeakyReLU(alpha=5.5)(conv1)
-        conv1 = BatchNormalization()(conv1)
-        conv1 = Conv2D(16, 3, kernel_initializer='lecun_uniform', kernel_regularizer=regularizers.l2(0.001))(conv1)
-        conv1 = LeakyReLU(alpha=5.5)(conv1)
-        conv1 = BatchNormalization()(conv1)
-        conv1 = Conv2D(32, 3, kernel_initializer='lecun_uniform', kernel_regularizer=regularizers.l2(0.001))(conv1)
-        conv1 = LeakyReLU(alpha=5.5)(conv1)
-        conv1 = BatchNormalization()(conv1)
-        conv1 = Conv2D(32, 3, kernel_initializer='lecun_uniform', kernel_regularizer=regularizers.l2(0.001))(conv1)
-        conv1 = LeakyReLU(alpha=5.5)(conv1)
-        conv1 = BatchNormalization()(conv1)
-        drop1 = Dropout(0.2)(conv1)
-        pool1 = AveragePooling2D(pool_size=2)(drop1)
+        conv2 = Conv2D(8, 3, kernel_initializer="uniform")(conv1)
+        conv2 = LeakyReLU(alpha=5.5)(conv2)
+        conv2 = BatchNormalization()(conv2)
+        conv3 = Conv2D(16, 3, kernel_initializer="uniform")(conv2)
+        conv3 = LeakyReLU(alpha=5.5)(conv3)
+        conv3 = BatchNormalization()(conv3)
+        conv4 = Conv2D(16, 3, kernel_initializer="uniform")(conv3)
+        conv4 = LeakyReLU(alpha=5.5)(conv4)
+        conv4 = BatchNormalization()(conv4)
+        conv5 = Conv2D(32, 3, kernel_initializer="uniform")(conv4)
+        conv5 = LeakyReLU(alpha=5.5)(conv5)
+        conv5 = BatchNormalization()(conv5)
+        conv6 = Conv2D(32, 3, kernel_initializer="uniform")(conv5)
+        conv6 = LeakyReLU(alpha=5.5)(conv6)
+        conv6 = BatchNormalization()(conv6)
+        conv7 = Conv2D(64, 3, kernel_initializer="uniform")(conv6)
+        conv7 = LeakyReLU(alpha=5.5)(conv7)
+        conv7 = BatchNormalization()(conv7)
+        conv8 = Conv2D(64, 3, kernel_initializer="uniform")(conv7)
+        conv8 = LeakyReLU(alpha=5.5)(conv8)
+        conv8 = BatchNormalization()(conv8)
+        drop1 = Dropout(0.2)(conv8)
 
-        conv2 = Conv2D(32, 3, kernel_initializer='lecun_uniform', kernel_regularizer=regularizers.l2(0.001))(pool1)
-        conv2 = LeakyReLU(alpha=5.5)(conv2)
-        conv2 = BatchNormalization()(conv2)
-        conv2 = Conv2D(32, 3, kernel_initializer='lecun_uniform', kernel_regularizer=regularizers.l2(0.001))(conv2)
-        conv2 = LeakyReLU(alpha=5.5)(conv2)
-        conv2 = BatchNormalization()(conv2)
-        conv2 = Conv2D(64, 3, kernel_initializer='lecun_uniform', kernel_regularizer=regularizers.l2(0.001))(conv2)
-        conv2 = LeakyReLU(alpha=5.5)(conv2)
-        conv2 = BatchNormalization()(conv2)
-        conv2 = Conv2D(64, 3, kernel_initializer='lecun_uniform', kernel_regularizer=regularizers.l2(0.001))(conv2)
-        conv2 = LeakyReLU(alpha=5.5)(conv2)
-        conv2 = BatchNormalization()(conv2)
-        conv2 = Conv2D(32, 3, kernel_initializer='lecun_uniform', kernel_regularizer=regularizers.l2(0.001))(conv2)
-        conv2 = LeakyReLU(alpha=5.5)(conv2)
-        conv2 = BatchNormalization()(conv2)
-        conv2 = Conv2D(32, 3, kernel_initializer='lecun_uniform', kernel_regularizer=regularizers.l2(0.001))(conv2)
-        conv2 = LeakyReLU(alpha=5.5)(conv2)
-        conv2 = BatchNormalization()(conv2)
-        conv2 = Conv2D(32, 3, kernel_initializer='lecun_uniform', kernel_regularizer=regularizers.l2(0.001))(conv2)
-        conv2 = LeakyReLU(alpha=5.5)(conv2)
-        conv2 = BatchNormalization()(conv2)
+        conv9 = Conv2D(128, 3, kernel_initializer="uniform")(drop1)
+        conv9 = LeakyReLU(alpha=5.5)(conv9)
+        conv9 = BatchNormalization()(conv9)
 
-        up3 = UpSampling2D((6, 6))(conv2)
-        merge3 = concatenate([drop1, up3])
-        conv3 = Conv2D(32, 4, kernel_initializer='lecun_uniform', kernel_regularizer=regularizers.l2(0.001))(merge3)
-        conv3 = LeakyReLU(alpha=5.5)(conv3)
-        conv3 = BatchNormalization()(conv3)
-        conv3 = Conv2D(32, 3, kernel_initializer='lecun_uniform', kernel_regularizer=regularizers.l2(0.001))(conv3)
-        conv3 = LeakyReLU(alpha=5.5)(conv3)
-        conv3 = BatchNormalization()(conv3)
-        conv3 = Conv2D(16, 3, kernel_initializer='lecun_uniform', kernel_regularizer=regularizers.l2(0.001))(conv3)
-        conv3 = LeakyReLU(alpha=5.5)(conv3)
-        conv3 = BatchNormalization()(conv3)
-        conv3 = Conv2D(16, 3, kernel_initializer='lecun_uniform', kernel_regularizer=regularizers.l2(0.001))(conv3)
-        conv3 = LeakyReLU(alpha=5.5)(conv3)
-        conv3 = BatchNormalization()(conv3)
-        conv3 = Conv2D(8, 3, kernel_initializer='lecun_uniform', kernel_regularizer=regularizers.l2(0.001))(conv3)
-        conv3 = LeakyReLU(alpha=5.5)(conv3)
-        conv3 = BatchNormalization()(conv3)
-        conv3 = Conv2D(8, 3, kernel_initializer='lecun_uniform', kernel_regularizer=regularizers.l2(0.001))(conv3)
-        conv3 = LeakyReLU(alpha=5.5)(conv3)
-        conv3 = BatchNormalization()(conv3)
-        conv3 = Conv2D(4, 3, kernel_initializer='lecun_uniform', kernel_regularizer=regularizers.l2(0.001))(conv3)
-        conv3 = LeakyReLU(alpha=5.5)(conv3)
-        conv3 = BatchNormalization()(conv3)
 
-        conv3 = Conv2D(1, 1, activation="sigmoid")(conv3)
+        deconv8a = Deconv2D(64, 3, kernel_initializer="uniform")(conv9)
+        deconv8a = LeakyReLU(alpha=5.5)(deconv8a)
+        deconv8a = BatchNormalization()(deconv8a)
+        merge7 = multiply([conv8, deconv8a])
+        deconv7a = Deconv2D(64, 3, kernel_initializer="uniform")(merge7)
+        deconv7a = LeakyReLU(alpha=5.5)(deconv7a)
+        deconv7a = BatchNormalization()(deconv7a)
+        merge6 = multiply([conv7, deconv7a])
+        deconv6a = Deconv2D(32, 3, kernel_initializer="uniform")(merge6)
+        deconv6a = LeakyReLU(alpha=5.5)(deconv6a)
+        deconv6a = BatchNormalization()(deconv6a)
+        merge5 = multiply([conv6, deconv6a])
+        deconv5a = Deconv2D(32, 3, kernel_initializer="uniform")(merge5)
+        deconv5a = LeakyReLU(alpha=5.5)(deconv5a)
+        deconv5a = BatchNormalization()(deconv5a)
+        merge4 = multiply([conv5, deconv5a])
+        deconv4a = Deconv2D(16, 3, kernel_initializer="uniform")(merge4)
+        deconv4a = LeakyReLU(alpha=5.5)(deconv4a)
+        deconv4a = BatchNormalization()(deconv4a)
+        merge3 = multiply([conv4, deconv4a])
+        deconv3a = Deconv2D(16, 3, kernel_initializer="uniform")(merge3)
+        deconv3a = LeakyReLU(alpha=5.5)(deconv3a)
+        deconv3a = BatchNormalization()(deconv3a)
+        merge2 = multiply([conv3, deconv3a])
+        deconv2a = Deconv2D(8, 3, kernel_initializer="uniform")(merge2)
+        deconv2a = LeakyReLU(alpha=5.5)(deconv2a)
+        deconv2a = BatchNormalization()(deconv2a)
+        merge1 = multiply([conv2, deconv2a])
+        deconv1a = Deconv2D(8, 3, kernel_initializer="uniform")(merge1)
+        deconv1a = LeakyReLU(alpha=5.5)(deconv1a)
+        deconv1a = BatchNormalization()(deconv1a)
 
-        outputs = Reshape((9, 9, 9))(conv3)
+        flat = Flatten()(deconv1a)
+        dense = Dense(729, activation="relu")(flat)
+        outputs = Reshape((9, 9, 9))(dense)
 
         model = Model(inputs=inputs, outputs=outputs)
         model.summary()
@@ -265,29 +194,6 @@ class uNet:
         model.compile(optimizer = Nadam(lr=1e-5), loss = IoU, metrics = ["MAE", mean_squared_error, IoU_metric, clinic_loss])
 
         return model
-
-    def evaluate(self, trainingPath, targetPath, modelPath):
-        trainingData, targetData = [], []
-        dvk_train, dvk_goal = sio.loadmat(trainingPath), sio.loadmat(targetPath)
-        trainingData.append(dvk_train["density_f"])
-        targetData.append(dvk_goal["kernel_f"])
-        trainingData, targetData = np.array(trainingData), np.array(targetData)
-        v, w, x, y, z = trainingData.shape
-        trainingData, targetData = trainingData.reshape(v * z, w, x, y), targetData.reshape(v * z, w, x, y)
-
-        mean_trainingData, mean_targetData = np.mean(trainingData), np.mean(targetData)
-        std_trainingData, std_targetData = np.std(trainingData), np.std(targetData)
-        trainingData, targetData = (trainingData - mean_trainingData) / std_trainingData, (targetData - mean_targetData) / std_targetData
-
-        model = self.uNet(trainingData)
-        model.load_weights(modelPath)
-
-        x = np.arange(trainingData.shape[0])
-        np.random.shuffle(x)
-        train = trainingData[x]
-        test = targetData[x]
-
-        model.evaluate(x=train, y=test)
 
     def train(self, trainingPath, targetPath, mode = "dir", name="model"):
         """
@@ -305,43 +211,33 @@ class uNet:
         object.train("data/density/", "data/kernel/")
         :return:
         """
-        if mode == "npz":
-            trainingData, targetData = self.restore(trainingPath, targetPath)
-        elif mode == "dir":
-            trainingPath=trainingPath.replace("._","")
-            targetPath=targetPath.replace("._","")
-            trainingData = self.load(trainingPath, "density_f", appendix="", boost=False, fac=3, amount=30, norm=True)
-            targetData = self.load(targetPath, "kernel_f", appendix="", boost=False, fac=3, amount=30, norm=True)
+        trainingPath=trainingPath.replace("._","")
+        targetPath=targetPath.replace("._","")
+        trainingData = self.load(trainingPath, "density_f", appendix="", norm=True)
+        targetData = self.load(targetPath, "kernel_f", appendix="", norm=True)
 
-        x = np.arange(trainingData.shape[0])
-        np.random.shuffle(x)
-        if self.PCA == False:
-            trainingData_shuffled = trainingData[x]
-        else:
-            trainingData_shuffled = self.pca(trainingData[x])
-
-        targetData_shuffled = targetData[x]
 
         # separating the data
         quantil_upper = len(trainingData) - (round(len(trainingData) * self.trainQuantil))
-        x= trainingData_shuffled[0:quantil_upper]
-        y = targetData_shuffled[0:quantil_upper]
-        x_valid = trainingData_shuffled[quantil_upper:len(trainingData)]
-        y_valid = targetData_shuffled[quantil_upper:len(targetData)]
+        x = trainingData[0:quantil_upper]
+        y = targetData[0:quantil_upper]
+        x_valid = trainingData[quantil_upper:len(trainingData)]
+        y_valid = targetData[quantil_upper:len(targetData)]
 
         # training the model
         early_stopping = EarlyStopping(monitor='loss', min_delta=1e-6, patience=50, verbose=1, mode='auto')
-        model_checkpoint = ModelCheckpoint('./model/checkpoint.hdf5', monitor='loss', verbose=1, save_best_only=False, save_weights_only=False, mode='auto', period=10)
+        model_checkpoint = ModelCheckpoint('./model/checkpoint.hdf5', monitor='loss', verbose=1, save_best_only=False, save_weights_only=False, mode='auto', period=cfg.settings['period'])
         csv_logger = CSVLogger('./model/model_1.log')
-        tbcallback = TensorBoard(log_dir='./Graph', histogram_freq=1, write_grads=True, batch_size=self.batch_size, write_graph=False, write_images=False)
 
-        model = self.uNet(trainingData_shuffled)
-        model_callbacks = [model_checkpoint, csv_logger, early_stopping] # tbcallback,
-        model.fit(x, y, validation_data=(x_valid, y_valid), batch_size=self.batch_size, epochs=self.epochs, verbose=1, shuffle=True, callbacks=model_callbacks)
+        model = self.uNet(trainingData)
+        model_callbacks = [model_checkpoint, csv_logger, early_stopping]
+        model.fit(x, y, validation_data=(x_valid, y_valid), batch_size=self.batch_size, epochs=self.epochs, verbose=cfg.settings['verbose'], shuffle=True, callbacks=model_callbacks)
         model.save('model/' + name + '.h5')
-        return "Done!"
 
-    def predict(self, model, train, goal, organ="pizza", print_x = 33, print_y = 4, plot = True):
+        print("Finished with the training.")
+        return print("Done!")
+
+    def predict(self, model, trainingPath, targetPath, organ="pizza", save = False, x = 55, y = 5, plot = True):
         """
         :param model: path to the saved keras model
         :param train: path to the .mat training file
@@ -351,32 +247,20 @@ class uNet:
         object.predict("model/simpleModel.h5", "data/density/dense_0.mat", "data/kernel/kernel_0.mat")
         """
         model = load_model(model, custom_objects={"IoU": IoU, "IoU_metric": IoU_metric, "clinic_loss": clinic_loss})
+        targetData = self.load(targetPath, "kernel_f", appendix="", norm=True)
+        trainingData = self.load(trainingPath, "density_f", appendix="", norm=True)
 
-        trainingData, targetData = np.empty([9,9,9,0]), np.empty([9,9,9,0])
-
-        dvk_train, dvk_goal = sio.loadmat(train), sio.loadmat(goal)
-        trainingData = np.concatenate((trainingData, dvk_train["density_f"]), axis=3)
-        targetData = np.concatenate((targetData, dvk_goal["kernel_f"]), axis=3)
-        trainingData, targetData = np.array(trainingData), np.array(targetData)
-
-        trainingData = np.array(trainingData).T
-        targetData = np.array(targetData).T
-
-        trainingData = (0.9-0.1) * (trainingData - trainingData.min(axis=(0,1,2,3), keepdims=False)) / (trainingData.max(axis=(0,1,2,3), keepdims=False)-trainingData.min(axis=(0,1,2,3), keepdims=False)) + 0.1
-        targetData = (0.9-0.1) * (targetData - targetData.min(axis=(0,1,2,3), keepdims=False)) / (targetData.max(axis=(0,1,2,3), keepdims=False)-targetData.min(axis=(0,1,2,3), keepdims=False)) + 0.1
-
-        datapoints = trainingData
-        datatargetpoints = targetData
-        x,y = print_x, print_y
-
-        prediction = model.predict(datapoints)
-
-        eingang = datapoints[x][y]
-        ziel = datatargetpoints[x][y]
-        vorhersage = prediction[x][y]
-        fehler = np.sqrt((ziel - vorhersage) ** 2)
+        prediction = model.predict(trainingData[5000:5100])
 
         if plot == True:
-            data = [eingang, ziel, vorhersage, fehler]
+            data = [trainingData[x][y], targetData[x][y], prediction[x][y], np.absolute(targetData[x][y] - prediction[x][y])]
             vs.show_field(data, organ=organ)
+        if save == True:
+            sio.savemat('kernel_theresa.mat', {'kernel_prediction': prediction})
         return prediction
+
+
+
+obj = uNet()
+obj.train("data/density/", "data/kernel/")
+#prediction = obj.predict("model/checkpoint.hdf5", "data/density/", "data/kernel/")

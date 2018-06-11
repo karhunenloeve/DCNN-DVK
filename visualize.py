@@ -2,15 +2,12 @@ import numpy.ma as ma
 import numpy as np
 import matplotlib.pyplot as plt
 
-from mpl_toolkits.axes_grid1 import make_axes_locatable
-
 def show_field(data, organ="liver"):
     fig, axes = plt.subplots(nrows=2, ncols=2)
     counter = 0
     for ax in axes.flat:
         im = ax.imshow(data[counter], cmap="bone")
-        ax.set_adjustable('box-forced')
-        ax.autoscale(False)
+        ax.autoscale(True)
         ax.axis("off")
         plt.colorbar(im, ax=ax)
         counter += 1
