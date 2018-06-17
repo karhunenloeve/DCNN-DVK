@@ -16,3 +16,9 @@ Aus der CT-Bildgebung werden Ausschnitte entnommen, die man als Massenkernel bez
 Der Transfer von Massenkernen zu Dosis-Voxel-Kernen wird durch das neuronale Netz ersetzt.
 
 ---
+
+## Used tools
+
+* [Keras](https://keras.io/) - Keras Tensorflow Wrapper
+* [Scikit-Learn](http://scikit-learn.org/stable/index.html/) – Some preprocessing
+* [Tensorflow](https://www.tensorflow.org/) – Tensorflow as backend
