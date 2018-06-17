@@ -17,8 +17,20 @@ Der Transfer von Massenkernen zu Dosis-Voxel-Kernen wird durch das neuronale Net
 
 ---
 
-## Used tools
+## Benutzte Werkzeuge
 
 * [Keras](https://keras.io/) - Keras Tensorflow Wrapper
 * [Scikit-Learn](http://scikit-learn.org/stable/index.html/) – Some preprocessing
 * [Tensorflow](https://www.tensorflow.org/) – Tensorflow as backend
+
+### Zitation
+Luciano Melodia: Deep Learning zur Schätzung absorbierter Strahlungsdosis für die nuklearmedizinische Diagnostik. University of Regensburg (2018) [pdf](https://arxiv.org/abs/1805.09108).
+
+    @inproceedings{LuMe2018DVKCNN,
+     author    = "Luciano Melodia",
+     title     = "U-Deep Learning zur Schätzung absorbierter Strahlungsdosis für die nuklearmedizinische Diagnostik",
+     year      = "2018",
+     month     = "April",
+     publisher = "University of Regensburg",
+     url       = "https://arxiv.org/abs/1805.09108"
+    }
