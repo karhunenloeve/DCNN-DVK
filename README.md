@@ -28,7 +28,7 @@ Luciano Melodia: Deep Learning zur Schätzung absorbierter Strahlungsdosis für 
 
     @inproceedings{LuMe2018DVKCNN,
      author    = "Luciano Melodia",
-     title     = "U-Deep Learning zur Schätzung absorbierter Strahlungsdosis für die nuklearmedizinische Diagnostik",
+     title     = "Deep Learning zur Schätzung absorbierter Strahlungsdosis für die nuklearmedizinische Diagnostik",
      year      = "2018",
      month     = "April",
      publisher = "University of Regensburg",
