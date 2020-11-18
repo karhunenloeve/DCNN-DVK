@@ -1,38 +1,24 @@
-# Neuronales Netz zur Schätzung von Dosis-Voxel-Kernen
-Für die Berechnung der absorbierten Strahlungsdosis in der Dosimetrie werden Monte-Carlo Simulationen auf Gewebedichten aus einer CT-Bildgebung vollführt, um die deponierte Energie zu berechnen.
+# Deep Learning Estimation of Absorbed Dose for Nuclear Medicine Diagnostics
+To calculate the absorbed radiation dose in dosimetry, Monte Carlo simulations are performed on tissue densities from a CT imaging to calculate the deposited energy. The transfer of mass densities into the so-called dose-voxel-kernels corresponds to an image-to-image transfer. This transfer can be learned from image reconstruction and image segmentation techniques. Simulating dose-voxel kernels is extremely time-consuming and requires large resources. In the following, the algorithm is presented, which provides an alternative and fast solution for the calculation of DVKs. Sections are taken from CT imaging, which are called mass kernels. The entire CT image can be decomposed into these mass kernels. Then the Monte-Carlo simulation is performed on the mass kernel. The radiation energy of an isotope in the center of the mass nucleus is simulated. The result is the dose-voxel nuclei. These are then used for convolution of a SPECT imaging to obtain the distribution of the absorbed radiation dose. The transfer from mass nuclei to dose-voxel nuclei is replaced by the neural network.
+---
 
-Der Transfer von Massendichten in die sog. Dosis-Voxel-Kernel entspricht einem Bild zu Bild Transfer. Dieser Transfer kann mit Hilfe von Verfahren aus der Bildrekonstruktion und Bildsegmentierung gelernt werden. Dosis-Voxel-Kerne zu simulieren ist äußerst zeitintensiv und benötigt große Ressourcen.
+## Utilised tools
 
-Im Folgenden wird der Algorithmus vorgestellt, mit dessen Hilfe eine alternative und schnelle Lösung für die Berechnung von DVKs zur Verfügung gestellt wird.
+* [Keras](https://keras.io/) - Keras Tensorflow Wrapper.
+* [Scikit-Learn](http://scikit-learn.org/stable/index.html/) – some preprocessing.
+* [Tensorflow](https://www.tensorflow.org/) – Tensorflow as backend.
 
 ---
 
-## Simulation der DVKs
-
-<center><img src="https://github.com/karhunenloeve/DeepLearningCNN/blob/master/img/dvk_illu.jpg" alt="DVK Illustration" width="400px"></center>
-
-Aus der CT-Bildgebung werden Ausschnitte entnommen, die man als Massenkernel bezeichnet. Das gesamte CT-Bild lässt sich in diese Massenkernel zerlegen. Anschließend wird auf den Massenkernel die Monte-Carlo Simulation durchgeführt. Es wird die Strahlungsenergie eines Isotops im Zentrum des Massenkernels simuliert. Als Ergebnis erhält man die Dosis-Voxel-Kerne. Diese werden anschließend zur Faltung einer SPECT-Bildgebung verwendet, um die Verteilung der absorbierten Strahlungsdosis zu erhalten.
-
-Der Transfer von Massenkernen zu Dosis-Voxel-Kernen wird durch das neuronale Netz ersetzt.
-
----
-
-## Benutzte Werkzeuge
-
-* [Keras](https://keras.io/) - Keras Tensorflow Wrapper
-* [Scikit-Learn](http://scikit-learn.org/stable/index.html/) – Some preprocessing
-* [Tensorflow](https://www.tensorflow.org/) – Tensorflow as backend
-
----
-
-## Zitation
-Luciano Melodia: Deep Learning zur Schätzung absorbierter Strahlungsdosis für die nuklearmedizinische Diagnostik. University of Regensburg (2018) [pdf](https://arxiv.org/abs/1805.09108).
+## Citation
+Luciano Melodia: Deep Learning Estimation of Absorbed Dose for Nuclear Medicine Diagnostics. University of Regensburg (2018) [pdf](https://arxiv.org/abs/1805.09108).
 
     @inproceedings{LuMe2018DVKCNN,
      author    = "Luciano Melodia",
-     title     = "Deep Learning zur Schätzung absorbierter Strahlungsdosis für die nuklearmedizinische Diagnostik",
+     title     = "Deep Learning Estimation of Absorbed Dose for Nuclear Medicine Diagnostics",
      year      = "2018",
      month     = "April",
      publisher = "University of Regensburg",
-     url       = "https://arxiv.org/abs/1805.09108"
+     url       = "https://arxiv.org/abs/1805.09108",
+     note	   = "Master Thesis"
     }
